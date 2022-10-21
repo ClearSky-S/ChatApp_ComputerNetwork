@@ -2,17 +2,21 @@ import java.io.*;
 import java.net.*;
 import  java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.Scanner;
 
 class ChatRoom{
     String roomName;
     InetAddress multicastAddress;
     int port;
-    public ChatRoom(String roomName, int port) throws UnknownHostException, NoSuchAlgorithmException {
+    MulticastSocket socket;
+    public ChatRoom(String roomName, int port) throws IOException, NoSuchAlgorithmException {
         this.roomName = roomName;
         this.multicastAddress = InetAddress.getByName(getMulticastAddress(roomName));
         System.out.println("Room address: "+ multicastAddress.toString());
         this.port = port;
+        socket = new MulticastSocket(port);
+        socket.joinGroup(multicastAddress);
     }
     public static String getMulticastAddress(String roomName) throws NoSuchAlgorithmException {
         MessageDigest sh= MessageDigest.getInstance("SHA-256");
@@ -24,12 +28,12 @@ class ChatRoom{
 class Sender extends Thread{
     ChatRoom chatRoom;
     BufferedReader inFromUser;
-    DatagramSocket senderSocket;
+    MulticastSocket senderSocket;
     String userName;
     public Sender(ChatRoom chatRoom, BufferedReader inFromUser,String userName) throws IOException {
         this.chatRoom = chatRoom;
         this.inFromUser = inFromUser;
-        senderSocket = new DatagramSocket();
+        senderSocket = chatRoom.socket;
         this.userName = userName;
     }
 
@@ -40,22 +44,33 @@ class Sender extends Thread{
         while(true){
             try {
                 sentence = inFromUser.readLine();
+                if(sentence.equals("#EXIT")){
+                    break;
+                }
+                sentence = userName + ": "+sentence;
             } catch (IOException e) {
                 System.out.println("input error");
                 continue;
             }
-            if(sentence.equals("#EXIT")){
-                break;
-            }
+
             // 청크 단위로 나누고 보내야함
             sendData = sentence.getBytes();
-            DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, chatRoom.multicastAddress, chatRoom.port);
-            try {
-                senderSocket.send(sendPacket);
-            } catch (IOException e) {
-                System.out.println("send error");
-                continue;
+            for(int i=0; i <= (sendData.length-1)/512; i++ ){
+                int from = i*512;
+                int to = Math.min((i+1)*512,sendData.length);
+                byte[] temp = Arrays.copyOfRange(sendData,from, to);
+                DatagramPacket sendPacket = new DatagramPacket(
+                        temp,
+                        temp.length, chatRoom.multicastAddress, chatRoom.port);
+
+                try {
+                    senderSocket.send(sendPacket);
+                } catch (IOException e) {
+                    System.out.println("send error");
+                    continue;
+                }
             }
+
         }
     }
 }
@@ -65,8 +80,7 @@ class Receiver extends Thread {
 
     public Receiver(ChatRoom chatRoom) throws IOException {
         this.chatRoom = chatRoom;
-        receiverSocket = new MulticastSocket(chatRoom.port);
-        receiverSocket.joinGroup(chatRoom.multicastAddress);
+        receiverSocket = chatRoom.socket;
     }
     public void run(){
         while(true){
@@ -91,13 +105,16 @@ public class ChatApp1 {
         System.out.print("Input port number: ");
         int port = Integer.parseInt(inFromUser.readLine());
         System.out.print("Welcome to Chat App!\n");
-        System.out.print("Enter chat room name: ");
-        String roomName = inFromUser.readLine();
+        System.out.print("command: #JOIN (room name) (user name)\n");
+        System.out.print("Enter command: ");
+        String command = inFromUser.readLine();
+        String[] commandList = command.split(" ");
+        String roomName = commandList[1];
+
         InetAddress	localAddress = InetAddress.getLocalHost();
         ChatRoom chatRoom = new ChatRoom(roomName, port);
 
-        System.out.print("Enter your name: ");
-        String userName = inFromUser.readLine();
+        String userName = commandList[2];
 
         Thread receiver = new Receiver(chatRoom);
         Thread sender = new Sender(chatRoom, inFromUser, userName);
