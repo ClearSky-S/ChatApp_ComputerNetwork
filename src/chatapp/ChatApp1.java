@@ -1,9 +1,10 @@
+package chatapp;
+
 import java.io.*;
 import java.net.*;
 import  java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
-import java.util.Scanner;
 
 class ChatRoom{
     String roomName;
@@ -89,7 +90,7 @@ class Receiver extends Thread {
             try {
                 receiverSocket.receive(receivePacket);
             } catch (IOException e) {
-                System.out.println("Receiver error");
+                System.out.println("chatapp.Receiver error");
                 continue;
             }
             byte[] receiveData = new byte[receivePacket.getLength()];
