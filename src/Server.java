@@ -24,6 +24,7 @@ class ClientInfo extends Thread{
         this.chatRoomMap = chatRoomMap;
     }
     public void run(){
+        // 사용자가 보낸 메세지를 읽어서 채팅을 기록한다.
         while(true){
             try {
                 String line = reader.readLine(); // 서버 클래스 안의 line변수 안에 "안녕하세요!"가 저장됨
@@ -44,7 +45,7 @@ class ClientInfo extends Thread{
                         writer.flush();
                     }
                 } else if(commandList[0].equals("#JOIN")){
-                    // #JOIN room1 Kain
+                    // #JOIN room1 Yee
                     if(commandList.length<3){
                         writer.println("FAILED");
                         writer.flush();
@@ -65,16 +66,25 @@ class ClientInfo extends Thread{
                     writer.println("SUCCESS");
                     writer.flush();
                 } else if(commandList[0].equals("#STATUS")){
-                    writer.println("RoomName: "+chatRoomInfo.roomName+"\n Members:\n"+chatRoomInfo.clients.toString());
+                    writer.println(chatRoomInfo.readStatus());
                     writer.flush();
                 } else if(commandList[0].equals("#WRITE")){
-
-                    writer.println("WRITE");
+                    System.out.println(this.name+": "+line.split("@")[1]);
+                    this.chatRoomInfo.writeChat(this.name+": "+line.split("@")[1]);
+                    writer.println("Chat Sent!");
                     writer.flush();
                 } else if(commandList[0].equals("#READ")){
+                    if(this.chatRoomInfo==null){
+                        writer.println(".");
+                        writer.flush();
+                    } else if(this.chatRoomInfo.chats.size()-1==Integer.parseInt(commandList[1])){
+                        writer.println(".");
+                        writer.flush();
+                    }else{
+                        writer.println(this.chatRoomInfo.chats.size()-1+"@"+this.chatRoomInfo.readChat(Integer.parseInt(commandList[1])));
+                        writer.flush();
+                    }
 
-                    writer.println("READ");
-                    writer.flush();
                 }
                 else{
                     writer.println(line);
@@ -92,9 +102,28 @@ class ClientInfo extends Thread{
 class ChatRoomInfo{
     String roomName;
     ArrayList<ClientInfo> clients;
+    ArrayList<String> chats;
     public ChatRoomInfo(String roomName){
         this.roomName = roomName;
         clients = new ArrayList<>();
+        chats = new ArrayList<>();
+    }
+    void writeChat(String chat){
+        chats.add(chat);
+    }
+    String readChat(int index){
+        String result = "";
+        for(int i = index+1;i<chats.size();i++){
+            result += (chats.get(i)+"@");
+        }
+        return result;
+    }
+    String readStatus(){
+        String result = "RoomName: "+roomName+"@[Members]@";
+        for(int i = 0;i<clients.size();i++){
+            result += (clients.get(i).name+"@");
+        }
+        return result;
     }
 }
 
@@ -110,8 +139,8 @@ public class Server extends Thread{
             port1 = 2020;
             port2 = 2021;
         }
-        ServerSocket serverSocket1 = new ServerSocket(port1); // 포트번호를 9500번으로 지정
-        ServerSocket serverSocket2 = new ServerSocket(port2); // 포트번호를 9500번으로 지정
+        ServerSocket serverSocket1 = new ServerSocket(port1);
+        ServerSocket serverSocket2 = new ServerSocket(port2);
         while(true){
             System.out.println("연결을 기다리는 중...");
             Socket socket = serverSocket1.accept();
@@ -119,12 +148,9 @@ public class Server extends Thread{
             System.out.println("연결 수락됨" + isa.getHostName());
             // 소켓 -> 서버
             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));																	// 데이터를 읽어옴
-            //String line = reader.readLine(); // 서버 클래스 안의 line변수 안에 "안녕하세요!"가 저장됨
             // 서버 -> 소켓
             PrintWriter writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream())); // 소켓으로 데이터를
             // 바깥으로 보냄
-            //writer.println(line);
-            //writer.flush();
             ClientInfo client = new ClientInfo(socket, isa,reader, writer, chatRoomMap);
             client.start();
             clients.add(client);
